@@ -404,7 +404,7 @@ class URL(object):
         if k in self.parts    : self.__dict__["_parts"][k] = u(v); return
         raise AttributeError("'URL' object has no attribute '%s'" % k)
 
-    def open(self, timeout=10, proxy=None, user_agent=USER_AGENT, referrer=REFERRER, authentication=None):
+    def open(self, timeout=10, proxy=None, user_agent=USER_AGENT, referrer=REFERRER, authentication=None, headers={}):
         """ Returns a connection to the url from which data can be retrieved with connection.read().
             When the timeout amount of seconds is exceeded, raises a URLTimeout.
             When an error occurs, raises a URLError (e.g. HTTP404NotFound).
@@ -425,10 +425,13 @@ class URL(object):
         urllib2.install_opener(urllib2.build_opener(*handlers))
         # Send request.
         try:
-            request = urllib2.Request(bytestring(url), post, {
-                        "User-Agent": user_agent,
-                           "Referer": referrer
-                         })
+            request = urllib2.Request(bytestring(url), post)
+            request.add_header("User-Agent", user_agent)
+            if referrer != None:
+                request.add_header("Referer". referrer)
+            for header, value in headers.iteritems():
+                request.add_header(header, value)
+
             # Basic authentication is established with authentication=(username, password).
             if authentication is not None:
                 request.add_header("Authorization", "Basic %s" %
@@ -461,7 +464,7 @@ class URL(object):
         except ValueError as e:
             raise URLError(str(e), src=e, url=url)
 
-    def download(self, timeout=10, cached=True, throttle=0, proxy=None, user_agent=USER_AGENT, referrer=REFERRER, authentication=None, unicode=False, **kwargs):
+    def download(self, timeout=10, cached=True, throttle=0, proxy=None, user_agent=USER_AGENT, referrer=REFERRER, authentication=None, unicode=False, headers={}, **kwargs):
         """ Downloads the content at the given URL (by default it will be cached locally).
             Unless unicode=False, the content is returned as a unicode string.
         """
@@ -484,7 +487,19 @@ class URL(object):
         t = time.time()
         # Open a connection with the given settings, read it and (by default) cache the data.
         try:
-            data = self.open(timeout, proxy, user_agent, referrer, authentication).read()
+            response = self.open(timeout, proxy, user_agent, referrer, authentication, headers)
+            data = response.read()
+            if response.headers.has_key('Content-Encoding'):
+                encoding = response.headers['Content-Encoding']
+                if encoding == "gzip":
+                    import gzip
+                    from cStringIO import StringIO
+                    f = gzip.GzipFile(fileobj=StringIO(data))
+                    return f.read()
+                elif encoding == "deflate":
+                    import zlib
+                    return zlib.decompress(data, -15)
+            return data
         except socket.timeout as e:
             raise URLTimeout(src=e, url=self.string)
         if unicode is True:
@@ -587,11 +602,11 @@ class URL(object):
     def copy(self):
         return URL(self.string, self.method, self.query)
 
-def download(url=u"", method=GET, query={}, timeout=10, cached=True, throttle=0, proxy=None, user_agent=USER_AGENT, referrer=REFERRER, authentication=None, unicode=False):
+def download(url=u"", method=GET, query={}, timeout=10, cached=True, throttle=0, proxy=None, user_agent=USER_AGENT, referrer=REFERRER, authentication=None, unicode=False, headers={}):
     """ Downloads the content at the given URL (by default it will be cached locally).
         Unless unicode=False, the content is returned as a unicode string.
     """
-    return URL(url, method, query).download(timeout, cached, throttle, proxy, user_agent, referrer, authentication, unicode)
+    return URL(url, method, query).download(timeout, cached, throttle, proxy, user_agent, referrer, authentication, unicode, headers)
 
 #url = URL("http://user:pass@example.com:992/animal/bird?species#wings")
 #print(url.parts)
