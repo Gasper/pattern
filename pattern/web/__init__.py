@@ -401,6 +401,7 @@ class URL(object):
         if k in self.__dict__ : self.__dict__[k] = u(v); return
         if k == "string"      : self._set_string(v); return
         if k == "query"       : self.parts[k] = v; return
+        if k == "path"        : self.__dict__["_parts"][k] = v; return
         if k in self.parts    : self.__dict__["_parts"][k] = u(v); return
         raise AttributeError("'URL' object has no attribute '%s'" % k)
 
@@ -428,7 +429,7 @@ class URL(object):
             request = urllib2.Request(bytestring(url), post)
             request.add_header("User-Agent", user_agent)
             if referrer != None:
-                request.add_header("Referer". referrer)
+                request.add_header("Referer", referrer)
             for header, value in headers.iteritems():
                 request.add_header(header, value)
 
@@ -529,6 +530,27 @@ class URL(object):
         except:
             return True
         return True
+
+    def get_mimetype(self, timeout=10):
+        """ Yields the MIME-type of the document at the URL, or None.
+            MIME is more reliable than simply checking the document extension.
+            You can then do: URL.mimetype in MIMETYPE_IMAGE.
+        """
+        try:
+            return self.get_headers()["content-type"].split(";")[0]
+        except KeyError:
+            return None
+
+    def get_headers(self, timeout=10):
+        """ Yields a dictionary with the HTTP response headers.
+        """
+        if self.__dict__["_headers"] is None:
+            try:
+                h = dict(self.open(timeout).info())
+            except URLError:
+                h = {}
+            self.__dict__["_headers"] = h
+        return self.__dict__["_headers"]
 
     @property
     def mimetype(self, timeout=10):
